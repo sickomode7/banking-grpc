@@ -7,9 +7,14 @@ pace. Times are the start of each cue.
 Mux your recorded audio onto the silent video without re-encoding:
 
 ```bash
-ffmpeg -i video/01-proto.mp4 -i 01-proto-voice.m4a \
-       -c:v copy -c:a aac -shortest video/01-proto-final.mp4
+ffmpeg -i video/01-proto.mp4 -i 01-proto-voice.wav \
+       -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k \
+       -af apad -shortest video/01-proto-final.mp4
 ```
+
+`-af apad` pads your audio with silence and `-shortest` stops at the
+end of the video. Without `apad`, `-shortest` alone would cut the
+picture down to the length of the narration.
 
 `video/01-proto.srt` holds the same text as subtitles if you want them
 burned in:

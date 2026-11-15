@@ -26,18 +26,45 @@ python make_videos.py --preview  # a few PNG stills, no encoding
 ## Recording the voice-over
 
 1. Play the video once, out loud, with `VOICEOVER.md` open. Do not record yet.
-2. Record audio only (Audacity, or `pw-record` from the terminal). Watch the
-   video while you speak; the holds are sized for that paragraph at a calm pace.
-3. Mux without re-encoding the picture:
+2. Record audio only, while the video plays. `pw-record` writes straight to WAV:
 
 ```bash
-ffmpeg -i 01-proto.mp4 -i 01-proto-voice.m4a \
-       -c:v copy -c:a aac -b:a 192k -shortest 01-proto-final.mp4
+# the mic, not the output monitor. This machine has no default source set,
+# so name the target explicitly (or run `wpctl set-default 60` once).
+pw-record --target alsa_input.pci-0000_74_00.6.analog-stereo \
+          --rate 48000 --channels 1 --format s16 video/01-proto-voice.wav
+# speak, Ctrl+C when the video ends
 ```
 
-If your audio is shorter than the video, `-shortest` keeps the video length and
-the tail stays silent; if it is longer, trim the audio first rather than letting
-the last words get cut.
+3. Check the level before trusting the take:
+
+```bash
+ffmpeg -hide_banner -i 01-proto-voice.wav -af volumedetect -f null - 2>&1 \
+  | grep -E "mean_volume|max_volume"
+```
+
+Aim for `max_volume` around −9 to −6 dB. Nearer 0 means it will clip; below
+−30 means nobody will hear it.
+
+4. Trim the lead-in silence you get from starting the recorder first:
+
+```bash
+ffmpeg -i 01-proto-voice.wav \
+       -af "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.2" \
+       01-proto-trim.wav
+```
+
+5. Mux without re-encoding the picture:
+
+```bash
+ffmpeg -i 01-proto.mp4 -i 01-proto-voice.wav \
+       -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k \
+       -af apad -shortest 01-proto-final.mp4
+```
+
+`-af apad` pads the narration with silence, `-shortest` ends the file at the end
+of the picture. Using `-shortest` without `apad` cuts the video down to the
+length of your audio, which is the usual way a good take gets ruined.
 
 ## Optional subtitles
 
