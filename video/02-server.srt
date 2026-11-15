@@ -1,0 +1,280 @@
+1
+00:00:00,150 --> 00:00:04,747
+Now the server side: two processes and one RPC chain.
+
+2
+00:00:04,747 --> 00:00:10,263
+The account service owns balances, the transaction service owns transfers and history,
+
+3
+00:00:10,263 --> 00:00:15,319
+and it calls the account service for every balance it needs.
+
+4
+00:00:15,619 --> 00:00:19,162
+The account service owns balances and nothing else.
+
+5
+00:00:19,162 --> 00:00:25,805
+It has no idea what a transfer is, which is why it can be tested,
+
+6
+00:00:25,805 --> 00:00:28,462
+scaled and replaced on its own.
+
+7
+00:00:28,462 --> 00:00:31,562
+Three seeded accounts: alice, bob and carol.
+
+8
+00:00:31,562 --> 00:00:37,319
+A real deployment swaps this dict for a database behind the same interface.
+
+9
+00:00:37,619 --> 00:00:40,241
+This is the part that matters.
+
+10
+00:00:40,241 --> 00:00:47,233
+gRPC serves requests on a thread pool, so two transfers can be in flight at once.
+
+11
+00:00:47,233 --> 00:00:54,661
+A read, a compare and a write is not atomic, so both could read the same balance,
+
+12
+00:00:54,661 --> 00:00:59,468
+both pass the funds check, and the account ends up overdrawn.
+
+13
+00:00:59,468 --> 00:01:03,401
+The lock around the whole operation makes that impossible.
+
+14
+00:01:03,701 --> 00:01:12,043
+The store is the last line of defence: it refuses any update that would take the balance below zero,
+
+15
+00:01:12,043 --> 00:01:15,995
+and it raises rather than returning a magic value.
+
+16
+00:01:15,995 --> 00:01:20,386
+The service layer turns that raise into a status code.
+
+17
+00:01:20,386 --> 00:01:27,850
+There is a test that fires fifty parallel credits and asserts the balance grew by exactly fifty.
+
+18
+00:01:28,150 --> 00:01:33,145
+Validation first: an empty user id is INVALID_ARGUMENT, not a lookup.
+
+19
+00:01:33,145 --> 00:01:35,416
+An unknown account is NOT_FOUND.
+
+20
+00:01:35,416 --> 00:01:39,049
+context.abort sends that code and the detail string,
+
+21
+00:01:39,049 --> 00:01:44,952
+and on the client side the same call raises an error carrying both.
+
+22
+00:01:45,252 --> 00:01:47,517
+math.isfinite catches NaN and infinity,
+
+23
+00:01:47,517 --> 00:01:54,310
+which is not paranoia: one NaN in a balance poisons every arithmetic result after it.
+
+24
+00:01:54,310 --> 00:01:57,027
+A zero delta is rejected too,
+
+25
+00:01:57,027 --> 00:02:02,462
+because it is a no-op that would only pollute the audit log.
+
+26
+00:02:02,762 --> 00:02:04,638
+Three outcomes, three codes.
+
+27
+00:02:04,638 --> 00:02:05,838
+It worked.
+
+28
+00:02:05,838 --> 00:02:08,651
+The account does not exist, NOT_FOUND.
+
+29
+00:02:08,651 --> 00:02:11,933
+Or the balance would go negative, FAILED_PRECONDITION.
+
+30
+00:02:11,933 --> 00:02:16,153
+A client can branch on those without parsing text.
+
+31
+00:02:16,191 --> 00:02:19,824
+The transaction service holds no balances, only history,
+
+32
+00:02:19,824 --> 00:02:23,002
+and one channel created once and reused.
+
+33
+00:02:23,002 --> 00:02:28,452
+Creating a channel per request would redo the HTTP/2 handshake every time.
+
+34
+00:02:28,452 --> 00:02:32,993
+This process is now both a server and a client.
+
+35
+00:02:33,293 --> 00:02:39,800
+When the account service says NOT_FOUND, this re-raises exactly that code to our caller.
+
+36
+00:02:39,800 --> 00:02:47,238
+Errors keep their meaning all the way through the chain instead of being flattened into INTERNAL.
+
+37
+00:02:47,538 --> 00:02:48,738
+One: validate.
+
+38
+00:02:48,738 --> 00:02:53,895
+Both ids present, not the same account, amount positive and finite.
+
+39
+00:02:53,895 --> 00:03:00,929
+All of that happens before a single balance is read, so bad input costs nothing.
+
+40
+00:03:00,966 --> 00:03:07,198
+Two: both accounts must exist, so it asks the account service rather than assuming,
+
+41
+00:03:07,198 --> 00:03:12,094
+and a NOT_FOUND from there comes straight back to the caller.
+
+42
+00:03:12,094 --> 00:03:16,991
+Three: read the sender's balance and compare it before moving anything.
+
+43
+00:03:16,991 --> 00:03:21,442
+Not enough means FAILED_PRECONDITION and no state change at all.
+
+44
+00:03:21,742 --> 00:03:24,701
+Then leg one: debit the sender.
+
+45
+00:03:24,701 --> 00:03:31,605
+If that fails there is nothing to undo, so the error goes straight back.
+
+46
+00:03:31,905 --> 00:03:34,055
+Leg two credits the receiver.
+
+47
+00:03:34,055 --> 00:03:41,794
+Here is the honest part of a distributed system: these are two separate RPCs on two different keys,
+
+48
+00:03:41,794 --> 00:03:43,944
+and no transaction spans them.
+
+49
+00:03:43,944 --> 00:03:46,954
+If the credit fails, money has vanished.
+
+50
+00:03:46,954 --> 00:03:52,113
+So I debit again with the opposite amount to put it back,
+
+51
+00:03:52,113 --> 00:03:54,263
+then report the original error.
+
+52
+00:03:54,263 --> 00:04:01,142
+If the rollback itself fails I log it as critical with the amount that is missing,
+
+53
+00:04:01,142 --> 00:04:05,442
+because a silent inconsistency is worse than a loud one.
+
+54
+00:04:05,742 --> 00:04:12,200
+One transfer writes two history rows sharing one transaction id: OUT for the sender,
+
+55
+00:04:12,200 --> 00:04:14,045
+IN for the receiver.
+
+56
+00:04:14,045 --> 00:04:19,580
+Each row keeps balance_after from the response, so the statement is self-consistent.
+
+57
+00:04:19,580 --> 00:04:20,780
+Newest first.
+
+58
+00:04:20,803 --> 00:04:25,357
+History confirms the account exists by asking the account service,
+
+59
+00:04:25,357 --> 00:04:31,732
+so a real account with no activity returns an empty list rather than NOT_FOUND.
+
+60
+00:04:31,732 --> 00:04:37,197
+Then it applies the limit with a hard cap of a hundred.
+
+61
+00:04:37,497 --> 00:04:41,553
+A thread pool of ten on a plaintext port.
+
+62
+00:04:41,553 --> 00:04:48,313
+In production this is add_secure_port with TLS credentials and the client uses a secure channel.
+
+63
+00:04:48,313 --> 00:04:55,523
+I kept it plaintext so the demo is reproducible, and I list that as a limitation.
+
+64
+00:04:55,823 --> 00:05:02,419
+This is the account log after one transfer: two balance reads, then a debit,
+
+65
+00:05:02,419 --> 00:05:03,833
+then a credit.
+
+66
+00:05:03,833 --> 00:05:08,544
+Four RPCs on this service for a single client call.
+
+67
+00:05:08,844 --> 00:05:14,717
+And this is the transaction log: the transfer id, the direction of money,
+
+68
+00:05:14,717 --> 00:05:17,427
+the resulting balances, and history reads.
+
+69
+00:05:17,427 --> 00:05:23,752
+Reading the two logs side by side is how you debug a distributed call,
+
+70
+00:05:23,752 --> 00:05:26,462
+because one transfer appears in both.
+

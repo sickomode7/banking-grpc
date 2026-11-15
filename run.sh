@@ -4,7 +4,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PY="${PY:-python3}"
+PY="${PY:-}"
+if [ -z "$PY" ]; then
+  if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=python3; fi
+fi
 mkdir -p logs
 
 "$PY" account_server.py     > logs/account.log     2>&1 & echo $! > logs/account.pid

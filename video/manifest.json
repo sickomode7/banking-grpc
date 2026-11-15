@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "01-proto",
+    "title": "1 \u00b7 banking.proto \u2014 the contract",
+    "duration": 192.2
+  },
+  {
+    "slug": "02-server",
+    "title": "2 \u00b7 server side \u2014 account and transaction services",
+    "duration": 326.61
+  },
+  {
+    "slug": "03-client",
+    "title": "3 \u00b7 client side",
+    "duration": 137.63
+  },
+  {
+    "slug": "04-demo",
+    "title": "4 \u00b7 live demo",
+    "duration": 163.22
+  }
+]

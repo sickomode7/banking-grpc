@@ -1,0 +1,164 @@
+1
+00:00:00,150 --> 00:00:08,282
+This is a distributed banking system built with gRPC and Protocol Buffers: an account service on port 50051,
+
+2
+00:00:08,282 --> 00:00:14,606
+a transaction service on 50052 that calls it, a client, and a test suite.
+
+3
+00:00:14,606 --> 00:00:17,768
+This first recording covers the proto contract.
+
+4
+00:00:18,068 --> 00:00:19,834
+This is the contract.
+
+5
+00:00:19,834 --> 00:00:26,015
+gRPC generates both the client stub and the server base class from this file,
+
+6
+00:00:26,015 --> 00:00:30,430
+so the two sides cannot disagree about the wire format.
+
+7
+00:00:30,430 --> 00:00:33,079
+Proto 3 is the current version,
+
+8
+00:00:33,079 --> 00:00:40,585
+and the package becomes the namespace: banking.AccountService is the name the server registers and the client resolves.
+
+9
+00:00:40,885 --> 00:00:43,985
+The assignment asks for getBalance and updateBalance.
+
+10
+00:00:43,985 --> 00:00:47,970
+I kept those names but capitalised them as PascalCase,
+
+11
+00:00:47,970 --> 00:00:53,285
+which the Protobuf style guide requires and the generated Python stubs follow.
+
+12
+00:00:53,285 --> 00:00:55,056
+GetBalance is a read.
+
+13
+00:00:55,056 --> 00:00:59,042
+UpdateBalance takes a signed amount: positive credits, negative debits,
+
+14
+00:00:59,042 --> 00:01:02,585
+and a reason field for the audit log.
+
+15
+00:01:02,885 --> 00:01:08,208
+Every message here is a request and response pair for one method.
+
+16
+00:01:08,208 --> 00:01:13,531
+The numbers after each field, equals one, equals two, are not ordering.
+
+17
+00:01:13,531 --> 00:01:20,184
+They are the field's identity on the wire and must never be reused once deployed,
+
+18
+00:01:20,184 --> 00:01:24,177
+because an old client would decode the wrong bytes.
+
+19
+00:01:24,477 --> 00:01:27,217
+The delta is the interesting field.
+
+20
+00:01:27,217 --> 00:01:29,957
+Minus fifty debits, plus fifty credits,
+
+21
+00:01:29,957 --> 00:01:40,462
+and the reason travels with it so the server log can say whether money moved because of a transfer or a manual adjustment.
+
+22
+00:01:40,762 --> 00:01:44,440
+The second service orchestrates transfers and owns history.
+
+23
+00:01:44,440 --> 00:01:49,956
+InitiateTransfer answers with a transaction id, a status, and both new balances,
+
+24
+00:01:49,956 --> 00:01:55,932
+so the caller does not need a follow-up read to know what happened.
+
+25
+00:01:56,232 --> 00:01:58,972
+Notice what is missing: no balances.
+
+26
+00:01:58,972 --> 00:02:02,169
+Money is not passed around in messages.
+
+27
+00:02:02,169 --> 00:02:06,280
+The transaction service asks the account service for balances,
+
+28
+00:02:06,280 --> 00:02:09,934
+and only the account service ever writes them.
+
+29
+00:02:09,934 --> 00:02:12,217
+That separation is the design.
+
+30
+00:02:12,517 --> 00:02:17,982
+A history row stores direction in or out, the counterparty, the amount,
+
+31
+00:02:17,982 --> 00:02:19,182
+and balance_after.
+
+32
+00:02:19,182 --> 00:02:29,200
+That last field is the useful one: it lets a statement be reconstructed without replaying every transaction from the beginning of time.
+
+33
+00:02:29,211 --> 00:02:35,421
+History comes back as a repeated field, which is a list on the wire,
+
+34
+00:02:35,421 --> 00:02:41,188
+plus a count so a client can page without counting the list itself.
+
+35
+00:02:41,188 --> 00:02:46,954
+The request takes a limit where zero means the server default of ten,
+
+36
+00:02:46,954 --> 00:02:50,503
+and the server caps it at a hundred.
+
+37
+00:02:50,803 --> 00:02:53,660
+One protoc run produces two files.
+
+38
+00:02:53,660 --> 00:02:57,946
+banking_pb2 holds the messages, banking_pb2_grpc holds the service stubs.
+
+39
+00:02:57,946 --> 00:03:02,707
+They are generated, so I never edit them by hand.
+
+40
+00:03:03,007 --> 00:03:07,028
+Both are committed so a clone runs immediately,
+
+41
+00:03:07,028 --> 00:03:12,054
+and the README still shows the command that regenerates them.
+

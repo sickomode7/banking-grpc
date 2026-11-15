@@ -1,0 +1,120 @@
+1
+00:00:00,150 --> 00:00:02,928
+The client: one CLI, two channels.
+
+2
+00:00:02,928 --> 00:00:06,169
+Balance commands go to the account service,
+
+3
+00:00:06,169 --> 00:00:09,873
+transfers and history go to the transaction service.
+
+4
+00:00:09,873 --> 00:00:14,503
+Then the test suite that keeps all of this honest.
+
+5
+00:00:14,803 --> 00:00:21,547
+The client is a thin CLI with two channels, because it talks to two services.
+
+6
+00:00:21,547 --> 00:00:25,144
+Balance commands go straight to the account service,
+
+7
+00:00:25,144 --> 00:00:28,741
+transfers and history go to the transaction service.
+
+8
+00:00:28,741 --> 00:00:33,238
+That mirrors how a real client would address separate backends.
+
+9
+00:00:33,538 --> 00:00:35,948
+Every call passes a deadline.
+
+10
+00:00:35,948 --> 00:00:37,148
+Without it,
+
+11
+00:00:37,148 --> 00:00:44,861
+a hung server blocks the client thread forever and the user just sees a frozen terminal.
+
+12
+00:00:44,926 --> 00:00:49,443
+Errors print the status code and the server's detail string.
+
+13
+00:00:49,443 --> 00:00:56,219
+The code is what a program branches on, the detail is what a human reads.
+
+14
+00:00:56,219 --> 00:00:59,382
+In the demo you will see FAILED_PRECONDITION,
+
+15
+00:00:59,382 --> 00:01:02,544
+NOT_FOUND and INVALID_ARGUMENT telling three different stories.
+
+16
+00:01:02,844 --> 00:01:08,379
+History renders direction as a sign: out is minus, in is plus,
+
+17
+00:01:08,379 --> 00:01:11,608
+and balance_after sits next to the amount.
+
+18
+00:01:11,608 --> 00:01:17,605
+So the table reads like a bank statement instead of a debug dump.
+
+19
+00:01:17,905 --> 00:01:23,737
+The demo command is a scripted version of the whole run: happy path,
+
+20
+00:01:23,737 --> 00:01:25,532
+then every error case,
+
+21
+00:01:25,532 --> 00:01:30,467
+then re-read the balances to prove the rejected calls changed nothing.
+
+22
+00:01:30,467 --> 00:01:36,748
+I scripted it so the recording is reproducible and I am not typing live.
+
+23
+00:01:37,048 --> 00:01:42,711
+Ten tests, and they spin both services up in process on ephemeral ports,
+
+24
+00:01:42,711 --> 00:01:46,195
+so they do not need the servers running.
+
+25
+00:01:46,195 --> 00:01:51,858
+They cover the seeded balance, a signed delta, a transfer conserving total money,
+
+26
+00:01:51,858 --> 00:01:54,907
+insufficient funds leaving balances untouched, unknown account,
+
+27
+00:01:54,907 --> 00:01:59,263
+four invalid argument cases, history ordering and limit, empty history,
+
+28
+00:01:59,263 --> 00:02:04,054
+a failed credit rolling back the debit, and fifty concurrent updates.
+
+29
+00:02:04,354 --> 00:02:12,325
+Green across the board, and the rollback test is the one I would point a reviewer at,
+
+30
+00:02:12,325 --> 00:02:17,483
+because it exercises the failure path rather than the happy one.
+

@@ -1,5 +1,11 @@
 # Video script — Banking system with gRPC
 
+> **The four videos already exist as silent recordings in `video/`.** Their exact
+> cue timings are in `video/VOICEOVER.md` — use that for recording, because it is
+> generated from the same file that rendered the video and therefore matches to
+> the frame. This document is the longer version: the reasoning behind each
+> section, and the answers to questions a reviewer is likely to ask.
+
 Total runtime ~11 minutes, four recordings matching the four deliverables.
 Read the **SAY** lines close to as written; the rest is stage direction.
 

@@ -1,0 +1,156 @@
+1
+00:00:00,150 --> 00:00:05,751
+And the live demo: both services starting from scratch, a real transfer,
+
+2
+00:00:05,751 --> 00:00:09,952
+the history it produces, five calls that get rejected,
+
+3
+00:00:09,952 --> 00:00:13,687
+and proof that the rejected calls changed nothing.
+
+4
+00:00:13,987 --> 00:00:15,943
+Two processes, two ports.
+
+5
+00:00:15,943 --> 00:00:18,878
+The account service owns the balances,
+
+6
+00:00:18,878 --> 00:00:22,302
+the transaction service owns transfers and history.
+
+7
+00:00:22,302 --> 00:00:24,258
+Both are now listening.
+
+8
+00:00:24,558 --> 00:00:28,277
+Alice has a thousand, bob two fifty fifty.
+
+9
+00:00:28,277 --> 00:00:33,855
+These are plain GetBalance calls straight to the account service on 50051,
+
+10
+00:00:33,855 --> 00:00:38,503
+and you can see them arrive in the account log.
+
+11
+00:00:38,803 --> 00:00:42,340
+One call to the transaction service on 50052.
+
+12
+00:00:42,340 --> 00:00:48,531
+Behind it: read both balances, debit alice, credit bob, then write two history rows.
+
+13
+00:00:48,531 --> 00:00:52,952
+Four RPCs on the account service for one client call.
+
+14
+00:00:52,952 --> 00:00:58,258
+The response carries the transaction id, the status and both new balances,
+
+15
+00:00:58,258 --> 00:01:00,911
+so no follow-up read is needed.
+
+16
+00:01:01,211 --> 00:01:06,925
+Alice is down to eight hundred, bob up to four fifty fifty.
+
+17
+00:01:06,925 --> 00:01:13,115
+The total is unchanged: a transfer moves value, it does not create it.
+
+18
+00:01:13,415 --> 00:01:15,771
+One transaction id, two histories.
+
+19
+00:01:15,771 --> 00:01:19,069
+Alice's row says out, bob's says in,
+
+20
+00:01:19,069 --> 00:01:22,367
+and balance_after matches what GetBalance just reported.
+
+21
+00:01:22,367 --> 00:01:26,136
+That is the consistency check I care about.
+
+22
+00:01:26,436 --> 00:01:28,295
+FAILED_PRECONDITION for insufficient funds,
+
+23
+00:01:28,295 --> 00:01:33,408
+with the actual balance against the requested amount in the detail.
+
+24
+00:01:33,408 --> 00:01:37,127
+NOT_FOUND for an account that does not exist.
+
+25
+00:01:37,127 --> 00:01:40,381
+Different codes, because they are different failures.
+
+26
+00:01:40,681 --> 00:01:45,794
+INVALID_ARGUMENT for a self transfer, caught before any balance is touched.
+
+27
+00:01:45,794 --> 00:01:52,301
+And a negative amount is rejected too: a negative transfer is a disguised withdrawal,
+
+28
+00:01:52,301 --> 00:01:54,626
+and withdrawals belong on UpdateBalance.
+
+29
+00:01:54,926 --> 00:02:00,135
+Carol has zero, and the store refuses to go below zero.
+
+30
+00:02:00,135 --> 00:02:07,238
+Then a plain read confirms carol is still at zero: the failed call changed nothing.
+
+31
+00:02:07,538 --> 00:02:13,139
+Final state: one recorded transfer, all the rejected calls absent from history,
+
+32
+00:02:13,139 --> 00:02:16,873
+and the transaction log showing the same id.
+
+33
+00:02:16,873 --> 00:02:21,074
+That is the whole failure story in one screen.
+
+34
+00:02:21,374 --> 00:02:26,689
+What I would defend: status codes instead of strings in a body,
+
+35
+00:02:26,689 --> 00:02:30,232
+one writer per balance guarded by a lock,
+
+36
+00:02:30,232 --> 00:02:33,774
+a compensating rollback when the credit leg fails,
+
+37
+00:02:33,774 --> 00:02:36,874
+and a deadline on every outbound call.
+
+38
+00:02:36,874 --> 00:02:40,417
+What is honestly missing: persistence, TLS, idempotency keys,
+
+39
+00:02:40,417 --> 00:02:43,074
+and integer money instead of doubles.
+

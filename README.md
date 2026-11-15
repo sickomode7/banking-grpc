@@ -30,7 +30,9 @@ other over gRPC.
 | `test_client.py` | 10 automated checks: validation, funds, rollback, concurrency |
 | `run.sh` | starts both servers in the background |
 | `render_screenshots.py` | turns captured output into PNGs for the report |
-| `SCRIPT.md` | voice-over script for the four required videos |
+| `make_videos.py` | renders the four silent walkthrough videos + cue sheet |
+| `video/` | the four MP4s, SRT subtitles, and `VOICEOVER.md` |
+| `SCRIPT.md` | full voice-over script and likely Q&A |
 | `outputs/` | screenshots of the real runs |
 
 ## Screenshots (`outputs/`)
